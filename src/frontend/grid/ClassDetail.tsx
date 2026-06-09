@@ -13,6 +13,7 @@ import {
 import { PROGRAM_LABEL, minToHHMM, programTag, reasonText, todayISO } from '@lib/format';
 import { ConflictError, deleteClass, finishClass, updateClass, type ClassInput } from '@lib/repo';
 import { queryKeys } from '@lib/queryKeys';
+import { Select } from '../ui/Select';
 
 const STATUSES: ClassStatus[] = ['NEW', 'TRIAL', 'ACTIVE', 'OFF'];
 
@@ -101,15 +102,19 @@ export function ClassDetail({
 
           <label>
             Status Kelas (lifecycle)
-            <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle)}>
-              {LIFECYCLES.map((lc) => <option key={lc} value={lc}>{LIFECYCLE_LABEL[lc]}</option>)}
-            </select>
+            <Select
+              value={lifecycle}
+              onChange={(v) => setLifecycle(v as Lifecycle)}
+              options={LIFECYCLES.map((lc) => ({ value: lc, label: LIFECYCLE_LABEL[lc] }))}
+            />
           </label>
           <label>
             Status Operasional
-            <select value={status} onChange={(e) => setStatus(e.target.value as ClassStatus)}>
-              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Select
+              value={status}
+              onChange={(v) => setStatus(v as ClassStatus)}
+              options={STATUSES.map((s) => ({ value: s, label: s }))}
+            />
           </label>
 
           {errors.length > 0 && (

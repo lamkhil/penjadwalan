@@ -90,7 +90,8 @@ export interface ClassRecord {
   teacherId: string | null;
   classroomId: string | null;
   startDate?: string; // ISO 'YYYY-MM-DD'
-  endDate?: string; // ISO 'YYYY-MM-DD' — tanggal akhir kelas (dipakai auto-complete)
+  sessions?: number; // jumlah pertemuan; endDate diestimasi dari ini + startDate + dayGroup
+  endDate?: string; // ISO 'YYYY-MM-DD' — tanggal akhir kelas (diestimasi; dipakai auto-complete)
   completedAt?: string; // ISO 'YYYY-MM-DD' — kapan kelas ditandai Selesai
   status: ClassStatus;
   lifecycle: Lifecycle;
@@ -140,7 +141,8 @@ export type ConflictReason =
   | { kind: 'OUT_OF_HOURS'; open: number; close: number }
   | { kind: 'TEACHER_OFF'; teacherId: string; dayGroup: DayGroup }
   | { kind: 'TEACHER_OVERLAP'; teacherId: string; conflictId: string }
-  | { kind: 'ROOM_OVERLAP'; classroomId: string; conflictId: string };
+  | { kind: 'ROOM_OVERLAP'; classroomId: string; conflictId: string }
+  | { kind: 'RETENTION_SAME_TEACHER'; teacherId: string; oldClassCode: string };
 
 export interface GuardResult {
   ok: boolean;
@@ -154,6 +156,7 @@ export interface GuideInput {
   level: number;
   dayGroup: DayGroup;
   teacherId?: string; // optional filter to a single teacher
+  classroomId?: string | null; // when set, also exclude slots where this room is busy
   gridStepMin?: number; // candidate start granularity, default 10
 }
 

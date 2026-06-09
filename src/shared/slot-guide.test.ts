@@ -64,4 +64,32 @@ describe('computeFreeSlots', () => {
     );
     expect(slots.every((s) => s.teacherId === 'T2')).toBe(true);
   });
+
+  it('without a room, a slot busy only by another teacher in that room stays free', () => {
+    // T2 occupies room R1 at 10:00. With no room chosen, T1 at 10:00 is still free.
+    const existing: ScheduledClass[] = [
+      { id: 'A', teacherId: 'T2', classroomId: 'R1', dayGroup: 'MON_WED', startMin: 600, durationMin: 60 },
+    ];
+    const slots = computeFreeSlots(
+      { programCode: 'LS', level: 2, dayGroup: 'MON_WED', teacherId: 'T1', gridStepMin: 60 },
+      teachers,
+      existing,
+    );
+    expect(slots.map((s) => s.startMin)).toContain(600);
+  });
+
+  it('excludes start-times where the selected room is busy, even with a different teacher', () => {
+    // T2 occupies room R1 at 10:00. Booking T1 into R1 must skip 10:00.
+    const existing: ScheduledClass[] = [
+      { id: 'A', teacherId: 'T2', classroomId: 'R1', dayGroup: 'MON_WED', startMin: 600, durationMin: 60 },
+    ];
+    const slots = computeFreeSlots(
+      { programCode: 'LS', level: 2, dayGroup: 'MON_WED', teacherId: 'T1', classroomId: 'R1', gridStepMin: 60 },
+      teachers,
+      existing,
+    );
+    const starts = slots.map((s) => s.startMin);
+    expect(starts).not.toContain(600); // room R1 occupied at 10:00
+    expect(starts).toContain(660); // 11:00 room free again
+  });
 });

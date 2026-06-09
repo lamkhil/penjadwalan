@@ -2,6 +2,7 @@ import {
   CLOSE_MIN,
   OPEN_MIN,
   type CandidateClass,
+  type ClassType,
   type ConflictReason,
   type DayGroup,
   type GuardResult,
@@ -72,4 +73,27 @@ export function checkConflicts(
   }
 
   return { ok: reasons.length === 0, reasons };
+}
+
+/**
+ * Retention policy: a retention class must be taught by a DIFFERENT teacher than
+ * the original class it continues. `oldClass` is the class found via the
+ * candidate's `oldClassCode` (undefined when it can't be located — in which case
+ * the rule can't be enforced and we allow it). Returns the violation reason or
+ * null. Pure: no I/O.
+ */
+export function checkRetentionTeacher(
+  candidate: { classType: ClassType; teacherId: string | null; oldClassCode?: string },
+  oldClass: { teacherId: string | null } | undefined,
+): ConflictReason | null {
+  if (candidate.classType !== 'RETENTION') return null;
+  if (!oldClass || candidate.teacherId == null) return null;
+  if (oldClass.teacherId === candidate.teacherId) {
+    return {
+      kind: 'RETENTION_SAME_TEACHER',
+      teacherId: candidate.teacherId,
+      oldClassCode: candidate.oldClassCode ?? '',
+    };
+  }
+  return null;
 }

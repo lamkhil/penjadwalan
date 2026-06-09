@@ -20,6 +20,7 @@ import {
 import { queryKeys } from '@lib/queryKeys';
 import { PROGRAM_LABEL, minToHHMM } from '@lib/format';
 import { OpenClassWizard } from '../grid/OpenClassWizard';
+import { Select } from '../ui/Select';
 
 type DayFilter = DayGroup | 'ALL';
 type LcFilter = Lifecycle | 'ALL';
@@ -62,14 +63,26 @@ export function ClassList() {
       <div className="master-head">
         <h1>Master Kelas</h1>
         <div className="head-tools">
-          <select value={day} onChange={(e) => setDay(e.target.value as DayFilter)}>
-            <option value="ALL">Semua hari</option>
-            {DAY_GROUPS.map((dg) => <option key={dg} value={dg}>{DAY_GROUP_LABEL[dg]}</option>)}
-          </select>
-          <select value={lc} onChange={(e) => setLc(e.target.value as LcFilter)}>
-            <option value="ALL">Semua status</option>
-            {LIFECYCLES.map((x) => <option key={x} value={x}>{LIFECYCLE_LABEL[x]}</option>)}
-          </select>
+          <Select
+            className="filter"
+            ariaLabel="Filter hari"
+            value={day}
+            onChange={(v) => setDay(v as DayFilter)}
+            options={[
+              { value: 'ALL', label: 'Semua hari' },
+              ...DAY_GROUPS.map((dg) => ({ value: dg, label: DAY_GROUP_LABEL[dg] })),
+            ]}
+          />
+          <Select
+            className="filter"
+            ariaLabel="Filter status"
+            value={lc}
+            onChange={(v) => setLc(v as LcFilter)}
+            options={[
+              { value: 'ALL', label: 'Semua status' },
+              ...LIFECYCLES.map((x) => ({ value: x, label: LIFECYCLE_LABEL[x] })),
+            ]}
+          />
           <input className="search" placeholder="Cari Class ID…" value={q} onChange={(e) => setQ(e.target.value)} />
           <button onClick={() => setWizardOpen(true)}>+ Buka Kelas</button>
         </div>

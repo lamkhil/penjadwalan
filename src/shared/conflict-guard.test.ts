@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkConflicts, overlaps } from './conflict-guard';
+import { checkConflicts, checkRetentionTeacher, overlaps } from './conflict-guard';
 import type { CandidateClass, DayGroup, ScheduledClass } from './types';
 
 // Default: every teacher works every day-group unless a test says otherwise.
@@ -98,5 +98,36 @@ describe('checkConflicts', () => {
     );
     expect(r.ok).toBe(false);
     expect(r.reasons).toContainEqual({ kind: 'ROOM_OVERLAP', classroomId: 'R1', conflictId: 'A' });
+  });
+});
+
+describe('checkRetentionTeacher', () => {
+  it('flags a retention class taught by the original teacher', () => {
+    const r = checkRetentionTeacher(
+      { classType: 'RETENTION', teacherId: 'T1', oldClassCode: 'SK1-2024' },
+      { teacherId: 'T1' },
+    );
+    expect(r).toEqual({ kind: 'RETENTION_SAME_TEACHER', teacherId: 'T1', oldClassCode: 'SK1-2024' });
+  });
+
+  it('allows a retention class with a different teacher', () => {
+    const r = checkRetentionTeacher(
+      { classType: 'RETENTION', teacherId: 'T2', oldClassCode: 'SK1-2024' },
+      { teacherId: 'T1' },
+    );
+    expect(r).toBeNull();
+  });
+
+  it('ignores non-retention classes', () => {
+    const r = checkRetentionTeacher({ classType: 'NEW', teacherId: 'T1' }, { teacherId: 'T1' });
+    expect(r).toBeNull();
+  });
+
+  it('allows when the old class cannot be located', () => {
+    const r = checkRetentionTeacher(
+      { classType: 'RETENTION', teacherId: 'T1', oldClassCode: 'GONE' },
+      undefined,
+    );
+    expect(r).toBeNull();
   });
 });

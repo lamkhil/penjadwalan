@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { computeSlotMatrix } from '@shared/slot-guide';
+import { overlaps } from '@shared/conflict-guard';
+import { estimateEndDate } from '@shared/session-dates';
+import {
+  SESSION_PACKAGES,
+  defaultPackageId,
+  packageById,
+  packageForRecord,
+  packageIdsFor,
+} from '@shared/session-packages';
 import { deriveDuration } from '@shared/duration';
 import {
   DAY_GROUPS,
@@ -19,6 +28,7 @@ import {
 import { PROGRAM_LABEL, minToHHMM, reasonText } from '@lib/format';
 import { ConflictError, createClass, updateClass, type ClassInput } from '@lib/repo';
 import { queryKeys } from '@lib/queryKeys';
+import { Select } from '../ui/Select';
 
 export function OpenClassWizard({
   teachers,
@@ -49,7 +59,9 @@ export function OpenClassWizard({
   const [startMin, setStartMin] = useState<number | null>(editing?.startMin ?? null);
   const [classroomId, setClassroomId] = useState<string | null>(editing?.classroomId ?? null);
   const [startDate, setStartDate] = useState(editing?.startDate ?? '');
-  const [endDate, setEndDate] = useState(editing?.endDate ?? '');
+  const [pkgId, setPkgId] = useState<string>(() =>
+    packageForRecord(editing?.programCode ?? programCode, editing?.dayGroup ?? dayGroup, editing?.sessions),
+  );
   const [lifecycle, setLifecycle] = useState<Lifecycle>(editing?.lifecycle ?? 'CONFIRMED');
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -57,6 +69,17 @@ export function OpenClassWizard({
   const program = programs.find((p) => p.code === programCode);
   const maxLevel = program?.maxLevel ?? 10;
   const duration = deriveDuration(programCode, level, dayGroup);
+
+  // Number of meetings comes from the selected preset package.
+  const sessions = packageById(pkgId)?.sessions ?? 0;
+  const pkgOptions = SESSION_PACKAGES.filter((p) => packageIdsFor(programCode).includes(p.id));
+
+  // End date is estimated from start date + number of meetings + which weekdays
+  // the day-group meets. '' when inputs are incomplete/invalid.
+  const estimatedEndDate = useMemo(
+    () => (startDate && sessions ? estimateEndDate(startDate, sessions, dayGroup) : ''),
+    [startDate, sessions, dayGroup],
+  );
 
   // The guide is computed entirely client-side from the loaded masters + classes.
   // Full time ruler per teacher (every 30 min); occupied slots flagged unavailable.
@@ -67,7 +90,7 @@ export function OpenClassWizard({
       (c) => c.dayGroup === dayGroup && c.id !== editing?.id && c.lifecycle !== 'COMPLETED',
     );
     return computeSlotMatrix(
-      { programCode, level, dayGroup, gridStepMin: 30 },
+      { programCode, level, dayGroup, classroomId, gridStepMin: 30 },
       teachers.map((t) => ({ id: t.id, worksDayGroups: t.worksDayGroups })),
       sameDay.map((c) => ({
         id: c.id,
@@ -78,7 +101,7 @@ export function OpenClassWizard({
         durationMin: c.durationMin,
       })),
     );
-  }, [classes, teachers, programCode, level, dayGroup, editing?.id]);
+  }, [classes, teachers, programCode, level, dayGroup, classroomId, editing?.id]);
 
   const slotsByTeacher = useMemo(() => {
     const m = new Map<string, { startMin: number; available: boolean }[]>();
@@ -97,12 +120,33 @@ export function OpenClassWizard({
 
   const teacherById = new Map(teachers.map((t) => [t.id, t]));
 
+  // Once a start time is chosen, which rooms are already busy at that slot?
+  // Room conflicts are teacher-independent — any overlapping class in the same
+  // day-group occupies the room. Used to disable taken rooms in the dropdown.
+  const occupiedRoomIds = useMemo(() => {
+    const busy = new Set<string>();
+    if (startMin == null) return busy;
+    const cInt = { start: startMin, end: startMin + duration };
+    for (const c of classes) {
+      if (c.id === editing?.id) continue;
+      if (c.dayGroup !== dayGroup) continue;
+      if (c.lifecycle === 'COMPLETED') continue;
+      if (!c.classroomId) continue;
+      if (overlaps(cInt, { start: c.startMin, end: c.startMin + c.durationMin })) {
+        busy.add(c.classroomId);
+      }
+    }
+    return busy;
+  }, [classes, startMin, duration, dayGroup, editing?.id]);
+
   async function onSave() {
     const errs: string[] = [];
     if (!classCode.trim()) errs.push('Class ID wajib diisi.');
     if (classType === 'RETENTION' && !oldClassCode.trim()) errs.push('Kode kelas lama wajib diisi untuk Retention Class.');
     if (!teacherId) errs.push('Pilih teacher.');
     if (startMin == null) errs.push('Pilih jam mulai dari slot yang tersedia.');
+    if (!classroomId) errs.push('Pilih ruang kelas.');
+    if (!startDate) errs.push('Isi tanggal mulai.');
     if (errs.length) {
       setErrors(errs);
       return;
@@ -119,7 +163,8 @@ export function OpenClassWizard({
       teacherId,
       classroomId,
       startDate: startDate || undefined,
-      endDate: endDate || undefined,
+      sessions,
+      endDate: estimatedEndDate || undefined,
       completedAt: editing?.completedAt,
       status: editing?.status ?? 'NEW',
       lifecycle,
@@ -156,10 +201,14 @@ export function OpenClassWizard({
           <div className="form-grid">
             <label>
               Jenis Kelas
-              <select value={classType} onChange={(e) => setClassType(e.target.value as ClassType)}>
-                <option value="NEW">New Class</option>
-                <option value="RETENTION">Retention Class</option>
-              </select>
+              <Select
+                value={classType}
+                onChange={(v) => setClassType(v as ClassType)}
+                options={[
+                  { value: 'NEW', label: 'New Class' },
+                  { value: 'RETENTION', label: 'Retention Class' },
+                ]}
+              />
             </label>
             {classType === 'RETENTION' && (
               <label>
@@ -173,60 +222,77 @@ export function OpenClassWizard({
             </label>
             <label>
               Program
-              <select
+              <Select
                 value={programCode}
-                onChange={(e) => {
-                  setProgramCode(e.target.value as ProgramCode);
+                onChange={(v) => {
+                  const next = v as ProgramCode;
+                  setProgramCode(next);
                   setLevel(1);
                   setTeacherId(null);
                   setStartMin(null);
+                  setPkgId(defaultPackageId(next, dayGroup));
                 }}
-              >
-                {programs.map((p) => (
-                  <option key={p.code} value={p.code}>{PROGRAM_LABEL[p.code]}</option>
-                ))}
-              </select>
+                options={programs.map((p) => ({ value: p.code, label: PROGRAM_LABEL[p.code] }))}
+              />
             </label>
             <label>
               Level
-              <select value={level} onChange={(e) => { setLevel(Number(e.target.value)); setTeacherId(null); setStartMin(null); }}>
-                {Array.from({ length: maxLevel }, (_, i) => i + 1).map((l) => (
-                  <option key={l} value={l}>{l}</option>
-                ))}
-              </select>
+              <Select
+                value={String(level)}
+                onChange={(v) => { setLevel(Number(v)); setTeacherId(null); setStartMin(null); }}
+                options={Array.from({ length: maxLevel }, (_, i) => i + 1).map((l) => ({ value: String(l), label: String(l) }))}
+              />
             </label>
             <label>
               Hari
-              <select value={dayGroup} onChange={(e) => { setDayGroup(e.target.value as DayGroup); setTeacherId(null); setStartMin(null); }}>
-                {DAY_GROUPS.map((dg) => (
-                  <option key={dg} value={dg}>{DAY_GROUP_LABEL[dg]}</option>
-                ))}
-              </select>
+              <Select
+                value={dayGroup}
+                onChange={(v) => { const dg = v as DayGroup; setDayGroup(dg); setTeacherId(null); setStartMin(null); setPkgId(defaultPackageId(programCode, dg)); }}
+                options={DAY_GROUPS.map((dg) => ({ value: dg, label: DAY_GROUP_LABEL[dg] }))}
+              />
             </label>
             <label>
-              Ruang Kelas (opsional)
-              <select value={classroomId ?? ''} onChange={(e) => setClassroomId(e.target.value || null)}>
-                <option value="">—</option>
-                {classrooms.map((r) => (
-                  <option key={r.id} value={r.id}>{r.code} — {r.name}</option>
-                ))}
-              </select>
+              Ruang Kelas
+              <Select
+                value={classroomId ?? ''}
+                onChange={(v) => setClassroomId(v || null)}
+                placeholder="— pilih ruang —"
+                options={classrooms.map((r) => {
+                  const taken = occupiedRoomIds.has(r.id);
+                  return {
+                    value: r.id,
+                    label: `${r.code} — ${r.name}${taken ? ' (terisi)' : ''}`,
+                    disabled: taken,
+                  };
+                })}
+              />
+              {classroomId && (
+                <span className="muted small">Slot jam akan menyesuaikan ketersediaan ruang ini.</span>
+              )}
             </label>
             <label>
-              Start Class (tanggal)
+              Tanggal Mulai
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </label>
             <label>
-              Tanggal Selesai (opsional)
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              Jumlah Pertemuan
+              <Select
+                value={pkgId}
+                onChange={(v) => setPkgId(v)}
+                options={pkgOptions.map((p) => ({ value: p.id, label: p.label }))}
+              />
+            </label>
+            <label>
+              Estimasi Selesai (otomatis)
+              <input type="date" value={estimatedEndDate} readOnly disabled />
             </label>
             <label>
               Status Kelas
-              <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle)}>
-                {LIFECYCLES.map((lc) => (
-                  <option key={lc} value={lc}>{LIFECYCLE_LABEL[lc]}</option>
-                ))}
-              </select>
+              <Select
+                value={lifecycle}
+                onChange={(v) => setLifecycle(v as Lifecycle)}
+                options={LIFECYCLES.map((lc) => ({ value: lc, label: LIFECYCLE_LABEL[lc] }))}
+              />
             </label>
             <div className="derived">
               Durasi otomatis: <strong>{duration} menit</strong>
@@ -250,6 +316,9 @@ export function OpenClassWizard({
             <h3>Slot tersedia (guide)</h3>
             <p className="muted small">
               Pilih teacher &amp; jam dari slot yang bebas bentrok untuk {PROGRAM_LABEL[programCode]} {level} ({duration} mnt).
+              {classroomId
+                ? ` Slot yang ruangannya (${classrooms.find((r) => r.id === classroomId)?.code ?? '—'}) sudah terpakai ikut di-nonaktifkan.`
+                : ' Pilih ruang kelas (opsional) agar slot ikut menyesuaikan ketersediaan ruang.'}
             </p>
             <div className="guide">
               {teachers

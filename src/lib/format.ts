@@ -57,5 +57,7 @@ export function reasonText(r: ConflictReason): string {
       return `Teacher sudah punya kelas yang bertabrakan di jam ini.`;
     case 'ROOM_OVERLAP':
       return `Ruang kelas sudah dipakai kelas lain di jam ini.`;
+    case 'RETENTION_SAME_TEACHER':
+      return `Kelas retention harus dipegang teacher yang berbeda dari kelas lama (${r.oldClassCode}).`;
   }
 }

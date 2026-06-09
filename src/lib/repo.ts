@@ -11,11 +11,12 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { checkConflicts } from '@shared/conflict-guard';
+import { checkConflicts, checkRetentionTeacher } from '@shared/conflict-guard';
 import { deriveDuration } from '@shared/duration';
 import { FREED_LIFECYCLES } from '@shared/types';
 import type {
   ClassRecord,
+  ClassType,
   Classroom,
   ConflictReason,
   DayGroup,
@@ -134,8 +135,24 @@ function toScheduled(c: ClassRecord): ScheduledClass {
 // accepted — it is always derived from program/level/dayGroup.
 export type ClassInput = Omit<ClassRecord, 'id' | 'durationMin'>;
 
+/** Find a class by its (user-entered) classCode. Used to resolve a retention
+ *  class's original class. Returns the first match or undefined. */
+async function findClassByCode(classCode: string): Promise<ClassRecord | undefined> {
+  const snap = await getDocs(query(collection(db, 'classes'), where('classCode', '==', classCode)));
+  return snap.docs.length ? withId<ClassRecord>(snap.docs[0]) : undefined;
+}
+
 async function runGuard(
-  candidate: { id?: string; teacherId: string | null; classroomId: string | null; dayGroup: DayGroup; startMin: number; durationMin: number },
+  candidate: {
+    id?: string;
+    classType: ClassType;
+    oldClassCode?: string;
+    teacherId: string | null;
+    classroomId: string | null;
+    dayGroup: DayGroup;
+    startMin: number;
+    durationMin: number;
+  },
 ): Promise<void> {
   const [existing, teachers] = await Promise.all([
     listClassesByDayGroup(candidate.dayGroup),
@@ -146,13 +163,24 @@ async function runGuard(
   const worksMap = new Map(teachers.map((t) => [t.id, new Set(t.worksDayGroups)]));
   const teacherWorks = (teacherId: string, dg: DayGroup) => worksMap.get(teacherId)?.has(dg) ?? false;
   const result = checkConflicts(candidate, active.map(toScheduled), teacherWorks);
-  if (!result.ok) throw new ConflictError(result.reasons);
+  const reasons = [...result.reasons];
+
+  // Retention classes must use a different teacher than the original class.
+  if (candidate.classType === 'RETENTION' && candidate.oldClassCode) {
+    const oldClass = await findClassByCode(candidate.oldClassCode);
+    const retention = checkRetentionTeacher(candidate, oldClass);
+    if (retention) reasons.push(retention);
+  }
+
+  if (reasons.length) throw new ConflictError(reasons);
 }
 
 /** Create a class. Derives duration, runs the conflict guard, then writes. */
 export async function createClass(input: ClassInput): Promise<string> {
   const durationMin = deriveDuration(input.programCode, input.level, input.dayGroup);
   await runGuard({
+    classType: input.classType,
+    oldClassCode: input.oldClassCode,
     teacherId: input.teacherId,
     classroomId: input.classroomId,
     dayGroup: input.dayGroup,
@@ -168,6 +196,8 @@ export async function updateClass(id: string, input: ClassInput): Promise<void> 
   const durationMin = deriveDuration(input.programCode, input.level, input.dayGroup);
   await runGuard({
     id,
+    classType: input.classType,
+    oldClassCode: input.oldClassCode,
     teacherId: input.teacherId,
     classroomId: input.classroomId,
     dayGroup: input.dayGroup,

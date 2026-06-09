@@ -19,8 +19,9 @@ interface GuideTeacher {
  * derived duration fits without violating the conflict guard, for a given
  * program/level/day-group. Used by the "open class" wizard guide.
  *
- * Pure: no I/O. The room is left unassigned at guide time (rooms are chosen
- * after the slot), so ROOM_OVERLAP cannot occur here.
+ * Pure: no I/O. When `input.classroomId` is set the candidate carries that room,
+ * so a slot is only free if both the teacher AND the room are available; when it
+ * is null the room is left unassigned and only teacher conflicts apply.
  */
 export function computeFreeSlots(
   input: GuideInput,
@@ -46,7 +47,7 @@ export function computeFreeSlots(
       const result = checkConflicts(
         {
           teacherId: t.id,
-          classroomId: null,
+          classroomId: input.classroomId ?? null,
           dayGroup: input.dayGroup,
           startMin: start,
           durationMin: duration,
@@ -102,7 +103,7 @@ export function computeSlotMatrix(
     const slots: SlotCell[] = [];
     for (let start = OPEN_MIN; start <= latestStart; start += step) {
       const result = checkConflicts(
-        { teacherId: t.id, classroomId: null, dayGroup: input.dayGroup, startMin: start, durationMin: duration },
+        { teacherId: t.id, classroomId: input.classroomId ?? null, dayGroup: input.dayGroup, startMin: start, durationMin: duration },
         existing,
         teacherWorks,
       );
