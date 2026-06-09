@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Internal staff tool: only authenticated users may read/write. Cross-document
+// overlap checks (teacher/room conflicts) run in the client guard — rules cannot
+// query other documents — but per-document shape is validated here so bad data
+// can't be written even by a misbehaving client.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /programs/{code} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /teachers/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /classrooms/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /students/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /enrollments/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /classes/{id} {
+      allow read: if signedIn();
+      allow delete: if signedIn();
+      allow create, update: if signedIn() && validClass(request.resource.data);
+    }
+
+    function validClass(d) {
+      return d.startMin is int
+        && d.durationMin is int
+        && d.startMin >= 540
+        && (d.startMin + d.durationMin) <= 1080
+        && d.classType in ['NEW', 'RETENTION']
+        && d.programCode in ['LS', 'SK', 'ST']
+        && d.dayGroup in ['MON_WED', 'TUE_THU', 'FRI', 'SAT', 'SUN']
+        && (d.classType != 'RETENTION' || (d.oldClassCode is string && d.oldClassCode.size() > 0));
+    }
+  }
+}
