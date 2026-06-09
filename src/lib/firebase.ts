@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 // Firebase web app config for project "sparks-scheduler". These values are not
 // secrets — they identify the project to the client SDK; access is governed by
@@ -17,7 +17,9 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// ignoreUndefinedProperties lets us write objects with optional fields left as
+// `undefined` (oldClassCode, startDate, endDate, completedAt, …) without errors.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 
 // Point the SDK at the local emulators when VITE_USE_EMULATOR=1, so you can
 // develop fully offline and free.

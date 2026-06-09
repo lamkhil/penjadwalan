@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { computeFreeSlots } from '@shared/slot-guide';
+import { computeSlotMatrix } from '@shared/slot-guide';
 import { deriveDuration } from '@shared/duration';
 import {
   DAY_GROUPS,
@@ -17,7 +17,7 @@ import {
   type Teacher,
 } from '@shared/types';
 import { PROGRAM_LABEL, minToHHMM, reasonText } from '@lib/format';
-import { ConflictError, createClass, type ClassInput } from '@lib/repo';
+import { ConflictError, createClass, updateClass, type ClassInput } from '@lib/repo';
 import { queryKeys } from '@lib/queryKeys';
 
 export function OpenClassWizard({
@@ -26,6 +26,7 @@ export function OpenClassWizard({
   classrooms,
   classes,
   defaultDayGroup,
+  editing,
   onClose,
 }: {
   teachers: Teacher[];
@@ -33,20 +34,23 @@ export function OpenClassWizard({
   classrooms: Classroom[];
   classes: ClassRecord[]; // classes for the currently-viewed day-group
   defaultDayGroup: DayGroup;
+  editing?: ClassRecord; // when set, the wizard edits this class instead of creating
   onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const [classType, setClassType] = useState<ClassType>('NEW');
-  const [oldClassCode, setOldClassCode] = useState('');
-  const [classCode, setClassCode] = useState('');
-  const [programCode, setProgramCode] = useState<ProgramCode>('LS');
-  const [level, setLevel] = useState(1);
-  const [dayGroup, setDayGroup] = useState<DayGroup>(defaultDayGroup);
-  const [teacherId, setTeacherId] = useState<string | null>(null);
-  const [startMin, setStartMin] = useState<number | null>(null);
-  const [classroomId, setClassroomId] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [lifecycle, setLifecycle] = useState<Lifecycle>('CONFIRMED');
+  const isEdit = !!editing;
+  const [classType, setClassType] = useState<ClassType>(editing?.classType ?? 'NEW');
+  const [oldClassCode, setOldClassCode] = useState(editing?.oldClassCode ?? '');
+  const [classCode, setClassCode] = useState(editing?.classCode ?? '');
+  const [programCode, setProgramCode] = useState<ProgramCode>(editing?.programCode ?? 'LS');
+  const [level, setLevel] = useState(editing?.level ?? 1);
+  const [dayGroup, setDayGroup] = useState<DayGroup>(editing?.dayGroup ?? defaultDayGroup);
+  const [teacherId, setTeacherId] = useState<string | null>(editing?.teacherId ?? null);
+  const [startMin, setStartMin] = useState<number | null>(editing?.startMin ?? null);
+  const [classroomId, setClassroomId] = useState<string | null>(editing?.classroomId ?? null);
+  const [startDate, setStartDate] = useState(editing?.startDate ?? '');
+  const [endDate, setEndDate] = useState(editing?.endDate ?? '');
+  const [lifecycle, setLifecycle] = useState<Lifecycle>(editing?.lifecycle ?? 'CONFIRMED');
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -55,11 +59,15 @@ export function OpenClassWizard({
   const duration = deriveDuration(programCode, level, dayGroup);
 
   // The guide is computed entirely client-side from the loaded masters + classes.
-  const freeSlots = useMemo(() => {
+  // Full time ruler per teacher (every 30 min); occupied slots flagged unavailable.
+  const slotMatrix = useMemo(() => {
     // The wizard can target any day-group; only classes for that day-group matter.
-    const sameDay = classes.filter((c) => c.dayGroup === dayGroup);
-    return computeFreeSlots(
-      { programCode, level, dayGroup, gridStepMin: 10 },
+    // When editing, exclude the class itself so its current slot reads as free.
+    const sameDay = classes.filter(
+      (c) => c.dayGroup === dayGroup && c.id !== editing?.id && c.lifecycle !== 'COMPLETED',
+    );
+    return computeSlotMatrix(
+      { programCode, level, dayGroup, gridStepMin: 30 },
       teachers.map((t) => ({ id: t.id, worksDayGroups: t.worksDayGroups })),
       sameDay.map((c) => ({
         id: c.id,
@@ -70,18 +78,22 @@ export function OpenClassWizard({
         durationMin: c.durationMin,
       })),
     );
-  }, [classes, teachers, programCode, level, dayGroup]);
+  }, [classes, teachers, programCode, level, dayGroup, editing?.id]);
 
-  // Group free start-times per teacher for display.
   const slotsByTeacher = useMemo(() => {
-    const m = new Map<string, number[]>();
-    for (const s of freeSlots) {
-      const arr = m.get(s.teacherId) ?? [];
-      arr.push(s.startMin);
-      m.set(s.teacherId, arr);
+    const m = new Map<string, { startMin: number; available: boolean }[]>();
+    for (const row of slotMatrix) {
+      const slots = row.slots.slice();
+      // Ensure the currently-selected start shows up even if off the 30-min ruler
+      // (e.g. an existing class starting at 10:10 while editing).
+      if (startMin != null && teacherId === row.teacherId && !slots.some((s) => s.startMin === startMin)) {
+        slots.push({ startMin, available: true });
+        slots.sort((a, b) => a.startMin - b.startMin);
+      }
+      m.set(row.teacherId, slots);
     }
     return m;
-  }, [freeSlots]);
+  }, [slotMatrix, startMin, teacherId]);
 
   const teacherById = new Map(teachers.map((t) => [t.id, t]));
 
@@ -107,14 +119,17 @@ export function OpenClassWizard({
       teacherId,
       classroomId,
       startDate: startDate || undefined,
-      status: 'NEW',
+      endDate: endDate || undefined,
+      completedAt: editing?.completedAt,
+      status: editing?.status ?? 'NEW',
       lifecycle,
     };
 
     setSaving(true);
     setErrors([]);
     try {
-      await createClass(input);
+      if (editing) await updateClass(editing.id, input);
+      else await createClass(input);
       await qc.invalidateQueries({ queryKey: queryKeys.classes });
       onClose();
     } catch (e) {
@@ -130,13 +145,14 @@ export function OpenClassWizard({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal wizard" onClick={(e) => e.stopPropagation()}>
+      <div className="modal wizard fullscreen" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
-          <h2>Buka Kelas Baru</h2>
+          <h2>{isEdit ? `Edit Kelas · ${editing!.classCode}` : 'Buka Kelas Baru'}</h2>
           <button className="ghost" onClick={onClose}>✕</button>
         </header>
 
-        <div className="modal-body">
+        <div className="modal-body wizard-cols">
+          <div className="wizard-left">
           <div className="form-grid">
             <label>
               Jenis Kelas
@@ -201,6 +217,10 @@ export function OpenClassWizard({
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </label>
             <label>
+              Tanggal Selesai (opsional)
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </label>
+            <label>
               Status Kelas
               <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle)}>
                 {LIFECYCLES.map((lc) => (
@@ -211,40 +231,6 @@ export function OpenClassWizard({
             <div className="derived">
               Durasi otomatis: <strong>{duration} menit</strong>
             </div>
-          </div>
-
-          <h3>Slot tersedia (guide)</h3>
-          <p className="muted small">
-            Pilih teacher &amp; jam dari slot yang bebas bentrok untuk {PROGRAM_LABEL[programCode]} {level} ({duration} mnt).
-          </p>
-          <div className="guide">
-            {teachers
-              .filter((t) => t.worksDayGroups.includes(dayGroup))
-              .map((t) => {
-                const starts = slotsByTeacher.get(t.id) ?? [];
-                return (
-                  <div className="guide-row" key={t.id}>
-                    <div className="guide-teacher">
-                      {t.code} <span className="muted small">{t.name}</span>
-                    </div>
-                    <div className="guide-slots">
-                      {starts.length === 0 && <span className="muted small">tidak ada slot</span>}
-                      {starts.map((s) => {
-                        const active = teacherId === t.id && startMin === s;
-                        return (
-                          <button
-                            key={s}
-                            className={active ? 'chip active' : 'chip'}
-                            onClick={() => { setTeacherId(t.id); setStartMin(s); }}
-                          >
-                            {minToHHMM(s)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
           </div>
 
           {teacherId != null && startMin != null && (
@@ -258,12 +244,51 @@ export function OpenClassWizard({
               {errors.map((e, i) => <div key={i} className="error">{e}</div>)}
             </div>
           )}
+          </div>
+
+          <div className="wizard-right">
+            <h3>Slot tersedia (guide)</h3>
+            <p className="muted small">
+              Pilih teacher &amp; jam dari slot yang bebas bentrok untuk {PROGRAM_LABEL[programCode]} {level} ({duration} mnt).
+            </p>
+            <div className="guide">
+              {teachers
+                .filter((t) => t.worksDayGroups.includes(dayGroup))
+                .map((t) => {
+                  const slots = slotsByTeacher.get(t.id) ?? [];
+                  return (
+                    <div className="guide-row" key={t.id}>
+                      <div className="guide-teacher">
+                        {t.code} <span className="muted small">{t.name}</span>
+                      </div>
+                      <div className="guide-slots">
+                        {slots.map((s) => {
+                          const active = teacherId === t.id && startMin === s.startMin;
+                          const cn = active ? 'chip active' : s.available ? 'chip' : 'chip taken';
+                          return (
+                            <button
+                              key={s.startMin}
+                              className={cn}
+                              disabled={!s.available}
+                              title={s.available ? undefined : 'Sudah terisi / bentrok'}
+                              onClick={() => { setTeacherId(t.id); setStartMin(s.startMin); }}
+                            >
+                              {minToHHMM(s.startMin)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
         </div>
 
         <footer className="modal-foot">
           <button className="ghost" onClick={onClose}>Batal</button>
           <button onClick={() => void onSave()} disabled={saving}>
-            {saving ? 'Menyimpan…' : 'Simpan Kelas'}
+            {saving ? 'Menyimpan…' : isEdit ? 'Simpan Perubahan' : 'Simpan Kelas'}
           </button>
         </footer>
       </div>

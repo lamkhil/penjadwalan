@@ -10,18 +10,21 @@ import { useClassesByDay, useMasters } from './useGridData';
 export function GridPage() {
   const [dayGroup, setDayGroup] = useState<DayGroup>('MON_WED');
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [selected, setSelected] = useState<ClassRecord | null>(null);
   const [showForming, setShowForming] = useState(true);
   const [showDraft, setShowDraft] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const { teachers, classrooms, programs } = useMasters();
   const { classes, loading } = useClassesByDay(dayGroup);
 
-  // Confirmed selalu tampil; Forming & Draft mengikuti toggle.
+  // Confirmed selalu tampil; Forming/Draft/Selesai mengikuti toggle.
   const visibleClasses = classes.filter((c) => {
     const lc = c.lifecycle ?? 'CONFIRMED';
     if (lc === 'FORMING') return showForming;
     if (lc === 'DRAFT') return showDraft;
+    if (lc === 'COMPLETED') return showCompleted;
     return true;
   });
 
@@ -60,6 +63,10 @@ export function GridPage() {
               <input type="checkbox" checked={showDraft} onChange={(e) => setShowDraft(e.target.checked)} />
               Draft
             </label>
+            <label className="toggle">
+              <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} />
+              Selesai
+            </label>
           </div>
           <button onClick={() => setWizardOpen(true)} disabled={mastersLoading}>+ Buka Kelas</button>
         </div>
@@ -78,14 +85,15 @@ export function GridPage() {
       )}
       {loading && <div className="muted small loading-hint">Menyinkronkan jadwal…</div>}
 
-      {wizardOpen && (
+      {(wizardOpen || editingClass) && (
         <OpenClassWizard
           teachers={teacherList}
           programs={programList}
           classrooms={classroomList}
           classes={classes}
           defaultDayGroup={dayGroup}
-          onClose={() => setWizardOpen(false)}
+          editing={editingClass ?? undefined}
+          onClose={() => { setWizardOpen(false); setEditingClass(null); }}
         />
       )}
 
@@ -94,6 +102,7 @@ export function GridPage() {
           cls={selected}
           teacher={selected.teacherId ? teacherById.get(selected.teacherId) : undefined}
           classroom={selected.classroomId ? roomById.get(selected.classroomId) : undefined}
+          onEdit={() => { setEditingClass(selected); setSelected(null); }}
           onClose={() => setSelected(null)}
         />
       )}

@@ -31,10 +31,19 @@ export function programTag(programCode: ProgramCode, level: number): string {
 }
 
 export const DRAFT_COLOR = '#c9ccd1'; // abu-abu untuk kelas Draft
+export const COMPLETED_COLOR = '#dfe2e6'; // abu pudar untuk kelas Selesai
 
-/** Block background by lifecycle: Draft = abu-abu, lainnya = warna program. */
+/** Block background by lifecycle: Draft/Selesai = abu, lainnya = warna program. */
 export function blockColor(programCode: ProgramCode, lifecycle: Lifecycle | undefined): string {
-  return lifecycle === 'DRAFT' ? DRAFT_COLOR : PROGRAM_COLOR[programCode];
+  if (lifecycle === 'DRAFT') return DRAFT_COLOR;
+  if (lifecycle === 'COMPLETED') return COMPLETED_COLOR;
+  return PROGRAM_COLOR[programCode];
+}
+
+/** Today's date as ISO 'YYYY-MM-DD' (local). */
+export function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** Human-readable Indonesian explanation of a guard rejection reason. */

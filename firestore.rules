@@ -46,7 +46,7 @@ service cloud.firestore {
         && d.classType in ['NEW', 'RETENTION']
         && d.programCode in ['LS', 'SK', 'ST']
         && d.dayGroup in ['MON_WED', 'TUE_THU', 'FRI', 'SAT', 'SUN']
-        && (!('lifecycle' in d) || d.lifecycle in ['CONFIRMED', 'FORMING', 'DRAFT'])
+        && (!('lifecycle' in d) || d.lifecycle in ['CONFIRMED', 'FORMING', 'DRAFT', 'COMPLETED'])
         && (d.classType != 'RETENTION' || (d.oldClassCode is string && d.oldClassCode.size() > 0));
     }
   }

@@ -20,17 +20,24 @@ export type ClassType = 'NEW' | 'RETENTION';
 
 export type ClassStatus = 'NEW' | 'TRIAL' | 'ACTIVE' | 'OFF';
 
-// Class lifecycle: CONFIRMED = berjalan, FORMING = akan datang (sedang dibentuk),
-// DRAFT = masih bisa diubah-ubah. Used to filter what the grid shows.
-export type Lifecycle = 'CONFIRMED' | 'FORMING' | 'DRAFT';
+// Class lifecycle:
+//  DRAFT     = belum mulai, masih bisa diubah-ubah
+//  FORMING   = belum mulai, sedang dibentuk (akan dibuka)
+//  CONFIRMED = kelas sedang berjalan
+//  COMPLETED = kelas sudah selesai (slot dibebaskan, disembunyikan di grid by default)
+export type Lifecycle = 'DRAFT' | 'FORMING' | 'CONFIRMED' | 'COMPLETED';
 
-export const LIFECYCLES: Lifecycle[] = ['CONFIRMED', 'FORMING', 'DRAFT'];
+export const LIFECYCLES: Lifecycle[] = ['DRAFT', 'FORMING', 'CONFIRMED', 'COMPLETED'];
 
 export const LIFECYCLE_LABEL: Record<Lifecycle, string> = {
-  CONFIRMED: 'Confirmed',
-  FORMING: 'Forming (akan datang)',
-  DRAFT: 'Draft (bisa diubah)',
+  DRAFT: 'Draft (belum mulai, bisa diubah)',
+  FORMING: 'Forming (belum mulai)',
+  CONFIRMED: 'Berjalan',
+  COMPLETED: 'Selesai',
 };
+
+// Lifecycles that no longer occupy a teacher's slot (excluded from conflict guard).
+export const FREED_LIFECYCLES: Lifecycle[] = ['COMPLETED'];
 
 // Operating hours, expressed as minutes-from-midnight. 09:00 = 540, 18:00 = 1080.
 export const OPEN_MIN = 540;
@@ -83,6 +90,8 @@ export interface ClassRecord {
   teacherId: string | null;
   classroomId: string | null;
   startDate?: string; // ISO 'YYYY-MM-DD'
+  endDate?: string; // ISO 'YYYY-MM-DD' — tanggal akhir kelas (dipakai auto-complete)
+  completedAt?: string; // ISO 'YYYY-MM-DD' — kapan kelas ditandai Selesai
   status: ClassStatus;
   lifecycle: Lifecycle;
   picCode?: string; // PIC staff code shown on grid block, e.g. 'FL'

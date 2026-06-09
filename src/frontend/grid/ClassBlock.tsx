@@ -29,6 +29,7 @@ export function ClassBlock({
         {programTag(cls.programCode, cls.level)}
         {lifecycle === 'FORMING' && <span className="cb-badge">F</span>}
         {lifecycle === 'DRAFT' && <span className="cb-badge">D</span>}
+        {lifecycle === 'COMPLETED' && <span className="cb-badge">✓</span>}
       </div>
       <div className="cb-meta">
         {cls.studentCount != null && <span>{cls.studentCount}</span>}

@@ -13,6 +13,7 @@ import {
 import { db } from './firebase';
 import { checkConflicts } from '@shared/conflict-guard';
 import { deriveDuration } from '@shared/duration';
+import { FREED_LIFECYCLES } from '@shared/types';
 import type {
   ClassRecord,
   Classroom,
@@ -24,6 +25,7 @@ import type {
   Student,
   Teacher,
 } from '@shared/types';
+import { todayISO } from './format';
 
 // ---- Error type carrying the structured guard reasons up to the UI ----
 
@@ -139,9 +141,11 @@ async function runGuard(
     listClassesByDayGroup(candidate.dayGroup),
     listTeachers(),
   ]);
+  // Completed classes no longer occupy their slot — exclude them from the check.
+  const active = existing.filter((c) => !FREED_LIFECYCLES.includes(c.lifecycle));
   const worksMap = new Map(teachers.map((t) => [t.id, new Set(t.worksDayGroups)]));
   const teacherWorks = (teacherId: string, dg: DayGroup) => worksMap.get(teacherId)?.has(dg) ?? false;
-  const result = checkConflicts(candidate, existing.map(toScheduled), teacherWorks);
+  const result = checkConflicts(candidate, active.map(toScheduled), teacherWorks);
   if (!result.ok) throw new ConflictError(result.reasons);
 }
 
@@ -175,6 +179,27 @@ export async function updateClass(id: string, input: ClassInput): Promise<void> 
 
 export async function deleteClass(id: string): Promise<void> {
   await deleteDoc(doc(db, 'classes', id));
+}
+
+/** Mark a running class as Selesai (COMPLETED). Frees its slot. */
+export async function finishClass(id: string): Promise<void> {
+  await updateDoc(doc(db, 'classes', id), { lifecycle: 'COMPLETED', completedAt: todayISO() });
+}
+
+/**
+ * Auto-complete any CONFIRMED class whose endDate has passed. Returns how many
+ * were updated. Idempotent — safe to call on every app load.
+ */
+export async function autoCompleteExpired(): Promise<number> {
+  const today = todayISO();
+  const snap = await getDocs(query(collection(db, 'classes'), where('lifecycle', '==', 'CONFIRMED')));
+  const expired = snap.docs
+    .map((d) => withId<ClassRecord>(d))
+    .filter((c) => c.endDate && c.endDate < today);
+  await Promise.all(
+    expired.map((c) => updateDoc(doc(db, 'classes', c.id), { lifecycle: 'COMPLETED', completedAt: today })),
+  );
+  return expired.length;
 }
 
 // ---- Enrollments ----

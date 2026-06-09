@@ -10,8 +10,8 @@ import {
   type Lifecycle,
   type Teacher,
 } from '@shared/types';
-import { PROGRAM_LABEL, minToHHMM, programTag, reasonText } from '@lib/format';
-import { ConflictError, deleteClass, updateClass, type ClassInput } from '@lib/repo';
+import { PROGRAM_LABEL, minToHHMM, programTag, reasonText, todayISO } from '@lib/format';
+import { ConflictError, deleteClass, finishClass, updateClass, type ClassInput } from '@lib/repo';
 import { queryKeys } from '@lib/queryKeys';
 
 const STATUSES: ClassStatus[] = ['NEW', 'TRIAL', 'ACTIVE', 'OFF'];
@@ -20,11 +20,13 @@ export function ClassDetail({
   cls,
   teacher,
   classroom,
+  onEdit,
   onClose,
 }: {
   cls: ClassRecord;
   teacher?: Teacher;
   classroom?: Classroom;
+  onEdit: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -37,7 +39,9 @@ export function ClassDetail({
     setBusy(true);
     setErrors([]);
     const { id: _id, durationMin: _d, ...rest } = cls;
-    const input: ClassInput = { ...rest, status, lifecycle };
+    // Set completedAt saat berpindah ke Selesai lewat dropdown (kalau belum ada).
+    const completedAt = lifecycle === 'COMPLETED' ? (cls.completedAt ?? todayISO()) : cls.completedAt;
+    const input: ClassInput = { ...rest, status, lifecycle, completedAt };
     try {
       await updateClass(cls.id, input);
       await qc.invalidateQueries({ queryKey: queryKeys.classes });
@@ -45,6 +49,20 @@ export function ClassDetail({
     } catch (e) {
       if (e instanceof ConflictError) setErrors(e.reasons.map(reasonText));
       else setErrors(['Gagal menyimpan.']);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selesaikan() {
+    setBusy(true);
+    setErrors([]);
+    try {
+      await finishClass(cls.id);
+      await qc.invalidateQueries({ queryKey: queryKeys.classes });
+      onClose();
+    } catch {
+      setErrors(['Gagal menyelesaikan kelas.']);
     } finally {
       setBusy(false);
     }
@@ -103,7 +121,10 @@ export function ClassDetail({
         <footer className="modal-foot">
           <button className="danger ghost" onClick={() => void remove()} disabled={busy}>Hapus</button>
           <div className="spacer" />
-          <button className="ghost" onClick={onClose}>Tutup</button>
+          {(cls.lifecycle ?? 'CONFIRMED') === 'CONFIRMED' && (
+            <button className="ghost" onClick={() => void selesaikan()} disabled={busy}>Selesaikan ✓</button>
+          )}
+          <button className="ghost" onClick={onEdit} disabled={busy}>Edit lengkap…</button>
           <button onClick={() => void save()} disabled={busy}>Simpan</button>
         </footer>
       </div>

@@ -63,3 +63,51 @@ export function computeFreeSlots(
   slots.sort((a, b) => (a.teacherId === b.teacherId ? a.startMin - b.startMin : a.teacherId < b.teacherId ? -1 : 1));
   return slots;
 }
+
+export interface SlotCell {
+  startMin: number;
+  available: boolean;
+}
+
+export interface TeacherSlots {
+  teacherId: string;
+  slots: SlotCell[];
+}
+
+/**
+ * Like computeFreeSlots, but returns EVERY candidate start-time per teacher with
+ * an `available` flag — so the UI can render a full time ruler and grey out the
+ * occupied ones instead of hiding them. Teachers who don't work the day-group
+ * are excluded entirely (their column shows OFF elsewhere).
+ */
+export function computeSlotMatrix(
+  input: GuideInput,
+  teachers: GuideTeacher[],
+  existing: ScheduledClass[],
+): TeacherSlots[] {
+  const duration = deriveDuration(input.programCode, input.level, input.dayGroup);
+  const step = input.gridStepMin ?? 30;
+  const latestStart = CLOSE_MIN - duration;
+
+  const worksMap = new Map(teachers.map((t) => [t.id, new Set(t.worksDayGroups)]));
+  const teacherWorks = (teacherId: string, dg: DayGroup) =>
+    worksMap.get(teacherId)?.has(dg) ?? false;
+
+  const candidates = teachers.filter((t) => {
+    if (input.teacherId && t.id !== input.teacherId) return false;
+    return teacherWorks(t.id, input.dayGroup);
+  });
+
+  return candidates.map((t) => {
+    const slots: SlotCell[] = [];
+    for (let start = OPEN_MIN; start <= latestStart; start += step) {
+      const result = checkConflicts(
+        { teacherId: t.id, classroomId: null, dayGroup: input.dayGroup, startMin: start, durationMin: duration },
+        existing,
+        teacherWorks,
+      );
+      slots.push({ startMin: start, available: result.ok });
+    }
+    return { teacherId: t.id, slots };
+  });
+}
