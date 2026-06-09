@@ -63,11 +63,13 @@ function exportMasters_() {
   var classes = fsList('classes');
   writeTable_(getOrCreateSheet_(ss, 'Classes'),
     ['classCode', 'classType', 'oldClassCode', 'programCode', 'level', 'dayGroup',
-      'startMin', 'startTime', 'durationMin', 'teacherId', 'classroomId', 'startDate', 'status'],
+      'startMin', 'startTime', 'durationMin', 'teacherId', 'classroomId', 'startDate',
+      'status', 'lifecycle'],
     classes.map(function (c) {
       return [c.classCode, c.classType, c.oldClassCode || '', c.programCode, c.level,
         c.dayGroup, c.startMin, minToHHMM_(c.startMin), c.durationMin,
-        c.teacherId || '', c.classroomId || '', c.startDate || '', c.status];
+        c.teacherId || '', c.classroomId || '', c.startDate || '', c.status,
+        c.lifecycle || 'CONFIRMED'];
     }));
 
   return { teachers: teachers, rooms: rooms, students: students, classes: classes };

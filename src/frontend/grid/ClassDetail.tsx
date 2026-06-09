@@ -2,16 +2,19 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   DAY_GROUP_LABEL,
+  LIFECYCLES,
+  LIFECYCLE_LABEL,
   type ClassRecord,
   type ClassStatus,
   type Classroom,
+  type Lifecycle,
   type Teacher,
 } from '@shared/types';
 import { PROGRAM_LABEL, minToHHMM, programTag, reasonText } from '@lib/format';
 import { ConflictError, deleteClass, updateClass, type ClassInput } from '@lib/repo';
 import { queryKeys } from '@lib/queryKeys';
 
-const STATUSES: ClassStatus[] = ['NEW', 'TRIAL', 'ACTIVE', 'FORMING', 'OFF'];
+const STATUSES: ClassStatus[] = ['NEW', 'TRIAL', 'ACTIVE', 'OFF'];
 
 export function ClassDetail({
   cls,
@@ -26,6 +29,7 @@ export function ClassDetail({
 }) {
   const qc = useQueryClient();
   const [status, setStatus] = useState<ClassStatus>(cls.status);
+  const [lifecycle, setLifecycle] = useState<Lifecycle>(cls.lifecycle ?? 'CONFIRMED');
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +37,7 @@ export function ClassDetail({
     setBusy(true);
     setErrors([]);
     const { id: _id, durationMin: _d, ...rest } = cls;
-    const input: ClassInput = { ...rest, status };
+    const input: ClassInput = { ...rest, status, lifecycle };
     try {
       await updateClass(cls.id, input);
       await qc.invalidateQueries({ queryKey: queryKeys.classes });
@@ -74,10 +78,17 @@ export function ClassDetail({
             <dt>Teacher</dt><dd>{teacher ? `${teacher.code} — ${teacher.name}` : '-'}</dd>
             <dt>Ruang</dt><dd>{classroom ? `${classroom.code} — ${classroom.name}` : '-'}</dd>
             <dt>Mulai</dt><dd>{cls.startDate ?? '-'}</dd>
+            <dt>Lifecycle</dt><dd>{LIFECYCLE_LABEL[cls.lifecycle ?? 'CONFIRMED']}</dd>
           </dl>
 
           <label>
-            Status
+            Status Kelas (lifecycle)
+            <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle)}>
+              {LIFECYCLES.map((lc) => <option key={lc} value={lc}>{LIFECYCLE_LABEL[lc]}</option>)}
+            </select>
+          </label>
+          <label>
+            Status Operasional
             <select value={status} onChange={(e) => setStatus(e.target.value as ClassStatus)}>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>

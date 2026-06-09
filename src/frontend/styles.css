@@ -41,6 +41,10 @@ label.checkbox { flex-direction: row; align-items: center; gap: 6px; font-weight
 .login-card { background: var(--panel); padding: 32px; border-radius: 14px; border: 1px solid var(--border); width: 320px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.06); }
 .login-card h1 { margin: 0; font-size: 20px; }
 .login-card p { margin: 0; }
+.divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.google-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: #fff !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 7px; padding: 9px 12px; font-weight: 600; }
+.google-btn:hover { background: #f7f8fa !important; }
 
 /* ---- Shell ---- */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
@@ -78,10 +82,17 @@ label.checkbox { flex-direction: row; align-items: center; gap: 6px; font-weight
 .off-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: repeating-linear-gradient(45deg, #f3d6d4, #f3d6d4 8px, #f7e3e1 8px, #f7e3e1 16px); color: var(--off); font-weight: 700; font-size: 12px; letter-spacing: 1px; }
 
 .class-block { position: absolute; left: 2px; right: 2px; border: none; border-radius: 5px; padding: 3px 4px; text-align: left; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 1px; color: #2a2118; }
-.cb-tag { font-weight: 700; font-size: 12px; }
+.cb-tag { font-weight: 700; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.cb-badge { font-size: 8px; font-weight: 800; background: rgba(0,0,0,.55); color: #fff; border-radius: 3px; padding: 0 3px; line-height: 1.4; }
 .cb-meta { display: flex; gap: 4px; font-size: 10px; flex-wrap: wrap; }
 .cb-room { margin-left: auto; font-weight: 700; }
 .cb-status { font-size: 9px; text-transform: uppercase; font-weight: 700; opacity: .7; }
+/* Forming = garis putus-putus; Draft = abu-abu + agak transparan */
+.class-block.lc-forming { border: 1.5px dashed rgba(0,0,0,.45); box-shadow: none; }
+.class-block.lc-draft { opacity: .85; border: 1.5px dotted rgba(0,0,0,.35); box-shadow: none; color: #3a3f47; }
+
+.lc-toggles { display: flex; gap: 10px; }
+.toggle { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text); }
 
 /* ---- Modals ---- */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(20,24,33,.4); display: grid; place-items: center; z-index: 50; padding: 20px; }

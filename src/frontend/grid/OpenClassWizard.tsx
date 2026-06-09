@@ -5,10 +5,13 @@ import { deriveDuration } from '@shared/duration';
 import {
   DAY_GROUPS,
   DAY_GROUP_LABEL,
+  LIFECYCLES,
+  LIFECYCLE_LABEL,
   type ClassRecord,
   type ClassType,
   type Classroom,
   type DayGroup,
+  type Lifecycle,
   type Program,
   type ProgramCode,
   type Teacher,
@@ -43,6 +46,7 @@ export function OpenClassWizard({
   const [startMin, setStartMin] = useState<number | null>(null);
   const [classroomId, setClassroomId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
+  const [lifecycle, setLifecycle] = useState<Lifecycle>('CONFIRMED');
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -104,7 +108,7 @@ export function OpenClassWizard({
       classroomId,
       startDate: startDate || undefined,
       status: 'NEW',
-      isForming: false,
+      lifecycle,
     };
 
     setSaving(true);
@@ -195,6 +199,14 @@ export function OpenClassWizard({
             <label>
               Start Class (tanggal)
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </label>
+            <label>
+              Status Kelas
+              <select value={lifecycle} onChange={(e) => setLifecycle(e.target.value as Lifecycle)}>
+                {LIFECYCLES.map((lc) => (
+                  <option key={lc} value={lc}>{LIFECYCLE_LABEL[lc]}</option>
+                ))}
+              </select>
             </label>
             <div className="derived">
               Durasi otomatis: <strong>{duration} menit</strong>

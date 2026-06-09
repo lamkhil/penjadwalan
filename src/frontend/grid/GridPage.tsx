@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ClassRecord, DayGroup } from '@shared/types';
-import { PROGRAM_COLOR, PROGRAM_LABEL } from '@lib/format';
+import { DRAFT_COLOR, PROGRAM_COLOR, PROGRAM_LABEL } from '@lib/format';
 import { DayGroupTabs } from './DayGroupTabs';
 import { ScheduleGrid } from './ScheduleGrid';
 import { OpenClassWizard } from './OpenClassWizard';
@@ -11,9 +11,19 @@ export function GridPage() {
   const [dayGroup, setDayGroup] = useState<DayGroup>('MON_WED');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [selected, setSelected] = useState<ClassRecord | null>(null);
+  const [showForming, setShowForming] = useState(true);
+  const [showDraft, setShowDraft] = useState(true);
 
   const { teachers, classrooms, programs } = useMasters();
   const { classes, loading } = useClassesByDay(dayGroup);
+
+  // Confirmed selalu tampil; Forming & Draft mengikuti toggle.
+  const visibleClasses = classes.filter((c) => {
+    const lc = c.lifecycle ?? 'CONFIRMED';
+    if (lc === 'FORMING') return showForming;
+    if (lc === 'DRAFT') return showDraft;
+    return true;
+  });
 
   const teacherList = teachers.data ?? [];
   const classroomList = classrooms.data ?? [];
@@ -36,6 +46,20 @@ export function GridPage() {
                 {PROGRAM_LABEL[p.code]}
               </span>
             ))}
+            <span className="legend-item">
+              <span className="swatch" style={{ background: DRAFT_COLOR }} />
+              Draft
+            </span>
+          </div>
+          <div className="lc-toggles">
+            <label className="toggle">
+              <input type="checkbox" checked={showForming} onChange={(e) => setShowForming(e.target.checked)} />
+              Forming
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={showDraft} onChange={(e) => setShowDraft(e.target.checked)} />
+              Draft
+            </label>
           </div>
           <button onClick={() => setWizardOpen(true)} disabled={mastersLoading}>+ Buka Kelas</button>
         </div>
@@ -48,7 +72,7 @@ export function GridPage() {
           dayGroup={dayGroup}
           teachers={teacherList}
           classrooms={classroomList}
-          classes={classes}
+          classes={visibleClasses}
           onBlockClick={setSelected}
         />
       )}

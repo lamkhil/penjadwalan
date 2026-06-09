@@ -106,6 +106,29 @@ function slugId(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
+// Classes extracted from the "Forming Class New" grid. teacherId/classroomId are
+// the teacher/room CODES (we seed those collections with code as the doc id).
+interface SeedClass {
+  classCode: string;
+  classType: 'NEW' | 'RETENTION';
+  programCode: 'LS' | 'SK' | 'ST';
+  level: number;
+  dayGroup: DayGroup;
+  startMin: number;
+  durationMin: number;
+  teacherId: string | null;
+  classroomId: string | null;
+  status: string;
+  isForming: boolean;
+  studentCount: number | null;
+  picCode: string | null;
+  startDate: string | null;
+}
+type Lifecycle = 'CONFIRMED' | 'FORMING' | 'DRAFT';
+const classes: SeedClass[] = JSON.parse(
+  readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 'classes.seed.json'), 'utf8'),
+);
+
 const classrooms: Omit<Classroom, 'id'>[] = [
   { code: 'F', name: 'Forest', floor: 'Lt 1' },
   { code: 'J', name: 'Jungle', floor: 'Lt 1' },
@@ -159,6 +182,29 @@ async function main() {
     n++;
   }
   console.log(`Seeded ${n} students`);
+
+  for (const c of classes) {
+    // Build the doc without undefined fields (Firestore rejects undefined).
+    const data: Record<string, unknown> = {
+      classCode: c.classCode,
+      classType: c.classType,
+      programCode: c.programCode,
+      level: c.level,
+      dayGroup: c.dayGroup,
+      startMin: c.startMin,
+      durationMin: c.durationMin,
+      teacherId: c.teacherId,
+      classroomId: c.classroomId,
+      status: c.status || 'NEW',
+      // Forming columns in the grid -> FORMING lifecycle; everything else CONFIRMED.
+      lifecycle: (c.isForming ? 'FORMING' : 'CONFIRMED') as Lifecycle,
+    };
+    if (c.studentCount != null) data.studentCount = c.studentCount;
+    if (c.picCode) data.picCode = c.picCode;
+    if (c.startDate) data.startDate = c.startDate;
+    await setDoc(doc(db, 'classes', c.classCode), data);
+  }
+  console.log(`Seeded ${classes.length} classes`);
 
   console.log('Done.');
   process.exit(0);

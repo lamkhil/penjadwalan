@@ -18,7 +18,19 @@ export const DAY_GROUP_LABEL: Record<DayGroup, string> = {
 
 export type ClassType = 'NEW' | 'RETENTION';
 
-export type ClassStatus = 'NEW' | 'TRIAL' | 'ACTIVE' | 'FORMING' | 'OFF';
+export type ClassStatus = 'NEW' | 'TRIAL' | 'ACTIVE' | 'OFF';
+
+// Class lifecycle: CONFIRMED = berjalan, FORMING = akan datang (sedang dibentuk),
+// DRAFT = masih bisa diubah-ubah. Used to filter what the grid shows.
+export type Lifecycle = 'CONFIRMED' | 'FORMING' | 'DRAFT';
+
+export const LIFECYCLES: Lifecycle[] = ['CONFIRMED', 'FORMING', 'DRAFT'];
+
+export const LIFECYCLE_LABEL: Record<Lifecycle, string> = {
+  CONFIRMED: 'Confirmed',
+  FORMING: 'Forming (akan datang)',
+  DRAFT: 'Draft (bisa diubah)',
+};
 
 // Operating hours, expressed as minutes-from-midnight. 09:00 = 540, 18:00 = 1080.
 export const OPEN_MIN = 540;
@@ -72,7 +84,7 @@ export interface ClassRecord {
   classroomId: string | null;
   startDate?: string; // ISO 'YYYY-MM-DD'
   status: ClassStatus;
-  isForming: boolean;
+  lifecycle: Lifecycle;
   picCode?: string; // PIC staff code shown on grid block, e.g. 'FL'
   studentCount?: number;
   notes?: string;

@@ -1,4 +1,4 @@
-import type { ConflictReason, ProgramCode } from '@shared/types';
+import type { ConflictReason, Lifecycle, ProgramCode } from '@shared/types';
 
 /** 540 -> "09:00" */
 export function minToHHMM(min: number): string {
@@ -28,6 +28,13 @@ export const PROGRAM_LABEL: Record<ProgramCode, string> = {
 /** Short program/level tag for a grid block, e.g. "LS 1". */
 export function programTag(programCode: ProgramCode, level: number): string {
   return `${programCode} ${level}`;
+}
+
+export const DRAFT_COLOR = '#c9ccd1'; // abu-abu untuk kelas Draft
+
+/** Block background by lifecycle: Draft = abu-abu, lainnya = warna program. */
+export function blockColor(programCode: ProgramCode, lifecycle: Lifecycle | undefined): string {
+  return lifecycle === 'DRAFT' ? DRAFT_COLOR : PROGRAM_COLOR[programCode];
 }
 
 /** Human-readable Indonesian explanation of a guard rejection reason. */
